@@ -18,10 +18,11 @@ import genius.core.utility.AdditiveUtilitySpace;
 
 public class Agent29 extends AbstractNegotiationParty
 {
-    private static double MINIMUM_TARGET = 0.8;
+    private AbstractUtilitySpace predictAbstractSpace;
+    private AdditiveUtilitySpace predictAddtiveSpace;
+
     private Bid lastOffer;
     private double threshold = 0.1;
-    private AbstractUtilitySpace userUtilitySpace;
     private int jonnyBlackRound = 0;  //计数 每10轮重新计算
 
     /**
@@ -32,18 +33,13 @@ public class Agent29 extends AbstractNegotiationParty
     {
         super.init(info);
 
-        AgentID agentID = info.getAgentID();
-        this.getUserModel().getBidRanking();
+//        AgentID agentID = info.getAgentID();
+//        this.getUserModel().getBidRanking();
 
-        // output
-        if (hasPreferenceUncertainty()) {
-            System.out.println("Preference uncertainty is enabled  " + agentID);
-        }
-
-
-        //TO DO: userModel
-//        GeneticAlgorithm genetic = new GeneticAlgorithm(this.getUserModel());
-//        userUtilitySpace = genetic.genUtilitySpace();
+        //userModel
+        UserPrefElicit userPref = new UserPrefElicit(userModel);
+        predictAbstractSpace = userPref.geneticAlgorithm();
+        predictAddtiveSpace = (AdditiveUtilitySpace) predictAbstractSpace;
     }
 
     @Override
@@ -103,7 +99,7 @@ public class Agent29 extends AbstractNegotiationParty
     }
 
     private Bid generateRandomBidByRank(double threshold) {
-        List<Bid> rankList = getBidOrder();
+        List<Bid> rankList = userModel.getBidRanking().getBidOrder();
         int bidOrderSize = rankList.size();
         Random rand = new Random();
         int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
@@ -114,11 +110,14 @@ public class Agent29 extends AbstractNegotiationParty
 
     // elicit rank 会产生额外cost
     private void elicitRank(Bid bid) {
-        if (!getBidOrder().contains(bid)) {
+        List<Bid> bidList = userModel.getBidRanking().getBidOrder();
+        if (!bidList.contains(bid)) {
             userModel = user.elicitRank(bid, userModel);
         }
 
     }
+
+
 
     /**
      * Remembers the offers received by the opponent.
@@ -144,7 +143,11 @@ public class Agent29 extends AbstractNegotiationParty
         return super.estimateUtilitySpace();
     }
 
-    private List<Bid> getBidOrder() {
-        return this.getUserModel().getBidRanking().getBidOrder();
+    private double disagreeUtility(double disagreePercent) {
+        List<Bid> bidList = userModel.getBidRanking().getBidOrder();
+        int bidListSize = bidList.size();
+        int disagreeIndex = (int)Math.ceil(bidListSize * disagreePercent);
+        double ret = this.predictAddtiveSpace.getUtility(bidList.get(disagreeIndex));
+        return ret;
     }
 }
