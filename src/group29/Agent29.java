@@ -21,8 +21,8 @@ public class Agent29 extends AbstractNegotiationParty
     private static double MINIMUM_TARGET = 0.8;
     private Bid lastOffer;
     private double threshold = 0.1;
-    private double targetUtility = 1;
     private AbstractUtilitySpace userUtilitySpace;
+    private int jonnyBlackRound = 0;  //计数 每10轮重新计算
 
     /**
      * Initializes a new instance of the agent.
@@ -65,6 +65,12 @@ public class Agent29 extends AbstractNegotiationParty
                 return new Accept(getPartyId(), lastOffer);
             } else {
                 // TO DO: nash
+                jonnyBlackRound += 1;
+                if (jonnyBlackRound == 10) {
+                    jonnyBlackRound = 0;
+
+                    // TO DO: jonny black
+                }
                 return new Offer(getPartyId(), generateRandomBidByRank(threshold));
             }
         } else {
@@ -104,6 +110,14 @@ public class Agent29 extends AbstractNegotiationParty
         int randomInt = rand.nextInt((bidOrderSize - min) + 1) + min;
 
         return rankList.get(randomInt - 1);
+    }
+
+    // elicit rank 会产生额外cost
+    private void elicitRank(Bid bid) {
+        if (!getBidOrder().contains(bid)) {
+            userModel = user.elicitRank(bid, userModel);
+        }
+
     }
 
     /**
