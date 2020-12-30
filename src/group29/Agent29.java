@@ -196,13 +196,12 @@ public class Agent29 extends AbstractNegotiationParty
 
     private void getEndPoints() {
         // 我方最高时 对方最高
-        List<Bid> highestUserBids = bidList.subList((int) Math.ceil(bidList.size() * 0.95), bidList.size() - 1);
+        List<Bid> highestUserBids = bidList.subList((int) Math.ceil(bidList.size() * 0.9), bidList.size() - 1);
         List<Double> oppUtility = new ArrayList<>();
         for (Bid bid:highestUserBids) {
             //TO DO:
             // jonny black
             double utility = iaMap.JBpredict(bid);
-//            System.out.println("opponent utility: "+ utility + " " + predictAddtiveSpace.getUtility(bid));
             oppUtility.add(utility);
         }
         double maxOppUtility = Collections.max(oppUtility);
@@ -218,7 +217,6 @@ public class Agent29 extends AbstractNegotiationParty
             //TO DO:
             // jonny black
             double utility = predictAddtiveSpace.getUtility(bid);
-//            System.out.println("user utility: "+ utility);
             userUtility.add(utility);
         }
         double maxUserUtility = Collections.max(userUtility);
@@ -255,9 +253,9 @@ public class Agent29 extends AbstractNegotiationParty
 
         if (boundSize >= 0) {
             int index = rand.nextInt(boundSize);
-            System.out.println("hahahahaha" + userUtilities.get(list.get(index)));
             return list.get(index);
         } else {
+            //如果不能取到这样的点 则在妥协范围里面找
             for (Bid bid: bidList) {
                 double utility = userUtilities.get(bid);
                 if (utility >= concessionUtility[0] && utility <= concessionUtility[1]) {
