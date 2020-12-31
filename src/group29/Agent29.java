@@ -74,7 +74,7 @@ public class Agent29 extends AbstractNegotiationParty
             threshold = getThresholdByTime(time);
             return new Offer(getPartyId(), generateRandomBidByRank(threshold));
         } else if (time < 0.9999) {
-            if (checkIfBidCanBeAccepted(lastOffer, time)) {
+            if (checkIfBidCanBeAccepted(lastOffer)) {
                 return new Accept(getPartyId(), lastOffer);
             } else {
                 // TO DO:
@@ -130,9 +130,19 @@ public class Agent29 extends AbstractNegotiationParty
         return 0.2;
     }
 
-    private Boolean checkIfBidCanBeAccepted(Bid bid, double time) {
+    private Boolean checkIfBidCanBeAccepted(Bid bid) {
+        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
 
-        //TO DO:
+        Point2D.Double target = new Point2D.Double(iaMap.JBpredict(bid), predictAddtiveSpace.getUtility(bid));
+        double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+
+        double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
+        if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
+            && userLastOfferUtility >= concessionUtility[0]) {
+            return true;
+        }
+        
         return false;
     }
 
