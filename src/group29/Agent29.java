@@ -138,29 +138,30 @@ public class Agent29 extends AbstractNegotiationParty
         double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
 
         double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
+        System.out.println("last offer utility: "+ userLastOfferUtility);
         if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
             && userLastOfferUtility >= concessionUtility[0]) {
             return true;
         }
-        
+
         return false;
     }
 
     // TO DO: 调整
     private void concessionByTime(double time) {
-//         if (time >= 0.5 && time <0.7) {
-//            concessionUtility[0] = 0.8;
-//            concessionUtility[1] = 0.95;
-//        } else if (time >= 0.7 && time <0.9) {
-//            concessionUtility[0] = 0.8;
-//            concessionUtility[1] = 0.9;
-//        } else if (time >= 0.9 && time <0.95) {
-//            concessionUtility[0] = 0.75;
-//            concessionUtility[1] = 0.85;
-//        } else {
-//            concessionUtility[0] = 0.7;
-//            concessionUtility[1] = 0.8;
-//        }
+         if (time >= 0.5 && time <0.7) {
+            concessionUtility[0] = 0.8;
+            concessionUtility[1] = 1;
+        } else if (time >= 0.7 && time <0.9) {
+            concessionUtility[0] = 0.8;
+            concessionUtility[1] = 0.95;
+        } else if (time >= 0.9 && time <0.95) {
+            concessionUtility[0] = 0.75;
+            concessionUtility[1] = 0.9;
+        } else {
+            concessionUtility[0] = 0.7;
+            concessionUtility[1] = 0.9;
+        }
     }
 
     private Bid generateRandomBidByRank(double threshold) {
