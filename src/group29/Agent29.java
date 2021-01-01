@@ -13,11 +13,15 @@ import genius.core.parties.AbstractNegotiationParty;
 import genius.core.parties.NegotiationInfo;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
+import genius.core.uncertainty.ExperimentalUserModel;
+import genius.core.utility.UncertainAdditiveUtilitySpace;
 
 public class Agent29 extends AbstractNegotiationParty
 {
     private AbstractUtilitySpace predictAbstractSpace;
     private AdditiveUtilitySpace predictAddtiveSpace;
+//    private ExperimentalUserModel e;
+//    private UncertainAdditiveUtilitySpace realUSpace;
 
     private IaMap iaMap;
     private Random rand = new Random();
@@ -62,6 +66,10 @@ public class Agent29 extends AbstractNegotiationParty
         // TO DO:
         // jonny black
         iaMap = new IaMap(userModel);
+
+        //test
+//        e = (ExperimentalUserModel) userModel;
+//        realUSpace = e.getRealUtilitySpace();
     }
 
     @Override
@@ -172,7 +180,7 @@ public class Agent29 extends AbstractNegotiationParty
             concessionUtility[0] = 0.85;
             concessionUtility[1] = 0.95;
         } else if (time >= 0.9 && time <0.95) {
-            concessionUtility[0] = 0.8;
+            concessionUtility[0] = 0.75;
             concessionUtility[1] = 0.9;
         } else {
             concessionUtility[0] = 0.7;
@@ -223,7 +231,7 @@ public class Agent29 extends AbstractNegotiationParty
 
     private void getEndPoints() {
         // 我方最高时 对方最高
-        List<Bid> highestUserBids = bidList.subList((int) Math.ceil(bidList.size() * 0.9), bidList.size() - 1);
+        List<Bid> highestUserBids = bidList.subList((int) Math.ceil(bidList.size() * 0.98), bidList.size() - 1);
         List<Double> oppUtility = new ArrayList<>();
         for (Bid bid:highestUserBids) {
             //TO DO:
@@ -239,7 +247,7 @@ public class Agent29 extends AbstractNegotiationParty
 
         // 对方最高时 我方最高
         List<Double> userUtility = new ArrayList<>();
-        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.ceil(bidList.size() * 0.9), bidList.size() - 1);
+        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.ceil(bidList.size() * 0.98), bidList.size() - 1);
         for (Bid bid:highestUserBids) {
             //TO DO:
             // jonny black
@@ -251,6 +259,9 @@ public class Agent29 extends AbstractNegotiationParty
 //        Bid opponentMax = opponentBidRank.get(opponentBidRank.size() - 1);
         endPoints[1][0] = opponentUtilities.get(maxUserBid);
         endPoints[1][1] = userUtilities.get(maxUserBid);
+
+        System.out.println("endPoints" + endPoints);
+
     }
 
     private void getAvailableBids() {
@@ -279,8 +290,14 @@ public class Agent29 extends AbstractNegotiationParty
         int boundSize = list.size() - 1;
 
         if (boundSize > 0) {
-            int index = rand.nextInt(boundSize);
-            return list.get(index);
+            Collections.sort(list, new OpponentBidComparetor());
+            // 对手的utility大的里面随机一个
+            int minIndex = (int) Math.ceil(boundSize / 2);
+            int index = rand.nextInt(boundSize - minIndex) + minIndex;
+            Bid bid = list.get(index);
+
+            System.out.println("my offer:"+ predictAddtiveSpace.getUtility(bid));
+            return bid;
         } else {
             //如果不能取到这样的点 则在妥协范围里面找
             for (Bid bid: bidList) {
