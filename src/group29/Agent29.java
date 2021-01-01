@@ -31,7 +31,7 @@ public class Agent29 extends AbstractNegotiationParty
     private int jonnyBlackRound = 10;  //计数 每10轮重新计算
 
     List<Bid> bidList = new ArrayList<>(); // bid总列表
-    private HashMap<Bid, Double> userUtilities = new HashMap<Bid, Double>(); //user所有bid的utility
+//    private HashMap<Bid, Double> userUtilities = new HashMap<Bid, Double>(); //user所有bid的utility
     private HashMap<Bid, Double> opponentUtilities = new HashMap<Bid, Double>(); // 对手所有bid的utility
     private List<Bid> opponentBidRank = new ArrayList<>(); //对手根据utility排序后的bid列表
     private double[][] endPoints = new double[2][2]; //筛选bid的直线的两个点
@@ -61,7 +61,7 @@ public class Agent29 extends AbstractNegotiationParty
         UserPrefElicit userPref = new UserPrefElicit(userModel);
         predictAbstractSpace = userPref.geneticAlgorithm();
         predictAddtiveSpace = (AdditiveUtilitySpace) predictAbstractSpace;
-        calculateAllUserUtilities();
+//        calculateAllUserUtilities();
 
         // TO DO:
         // jonny black
@@ -95,7 +95,7 @@ public class Agent29 extends AbstractNegotiationParty
                     getAvailableBids();
                 }
                 jonnyBlackRound += 1;
-                return new Offer(getPartyId(), generateRandomBidByAvailable());
+                return new Offer(getPartyId(), generateRandomBidByAvailable(time));
             }
         } else {
             return new EndNegotiation(getPartyId());
@@ -140,25 +140,28 @@ public class Agent29 extends AbstractNegotiationParty
     }
 
     private Boolean checkIfBidCanBeAccepted(Bid bid, Double time) {
-        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
-        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
-
-        Point2D.Double target = new Point2D.Double(iaMap.JBpredict(bid), predictAddtiveSpace.getUtility(bid));
-        double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
-
-        double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
-        System.out.println("last offer utility: "+ userLastOfferUtility);
-
         // TO DO
         // 考虑小的domain
+        // 有个concession 需要改成比例
         if (bidList.size() > 100) {
+            Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+            Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
+
+            Point2D.Double target = new Point2D.Double(iaMap.JBpredict(bid), predictAddtiveSpace.getUtility(bid));
+            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+
+            double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
+            System.out.println("last offer utility: "+ userLastOfferUtility);
+
             if (time < 0.95) {
                 if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
                         && userLastOfferUtility >= concessionUtility[0]) {
                     return true;
                 }
-            } else {
+            } else if (time < 0.99){
                 return userLastOfferUtility >= concessionUtility[0];
+            } else {
+                return true;
             }
 
         } else {
@@ -168,7 +171,7 @@ public class Agent29 extends AbstractNegotiationParty
                 elicitRank(bid);
             }
             int index = bidList.indexOf(bid);
-            return ((double) index / bidList.size()) >= concessionUtility[1];
+            return ((double) index / bidList.size()) >= concessionUtility[0];
 
         }
 
@@ -201,93 +204,11 @@ public class Agent29 extends AbstractNegotiationParty
         return bidList.get(randomInt);
     }
 
-    // elicit rank 会产生额外cost
-    private void elicitRank(Bid bid) {
-        if (!bidList.contains(bid)) {
-            userModel = user.elicitRank(bid, userModel);
-            bidList = userModel.getBidRanking().getBidOrder();
-        }
-
-    }
-
-    private double disagreeUtility(double disagreePercent) {
-        int bidListSize = bidList.size();
-        int disagreeIndex = (int)Math.floor(bidListSize * disagreePercent);
-        double ret = this.predictAddtiveSpace.getUtility(bidList.get(disagreeIndex));
-        return ret;
-    }
-
-    private void calculateAllUserUtilities() {
-        for (Bid bid: bidList) {
-            userUtilities.put(bid, predictAddtiveSpace.getUtility(bid));
-        }
-    }
-    private void calculateAllOpponentUtilities() {
-        for (Bid bid:bidList) {
-            //TO DO:
-            //opponent utilities
-            opponentUtilities.put(bid, iaMap.JBpredict(bid));
-        }
-        opponentBidRank.addAll(bidList);
-
-        Collections.sort(opponentBidRank, new OpponentBidComparetor());
-    }
-
-
-    private void getEndPoints() {
-        // 我方最高时 对方最高
-        List<Bid> highestUserBids = bidList.subList((int) Math.floor(bidList.size() * 0.98), bidList.size() - 1);
-        List<Double> oppUtility = new ArrayList<>();
-        for (Bid bid:highestUserBids) {
-            //TO DO:
-            // jonny black
-            double utility = iaMap.JBpredict(bid);
-            oppUtility.add(utility);
-        }
-        double maxOppUtility = Collections.max(oppUtility);
-        Bid maxOppBid = highestUserBids.get(oppUtility.indexOf(maxOppUtility));
-//        Bid userMax = bidList.get(bidList.size() - 1);
-        endPoints[0][0] = opponentUtilities.get(maxOppBid);
-        endPoints[0][1] = userUtilities.get(maxOppBid);
-
-        // 对方最高时 我方最高
-        List<Double> userUtility = new ArrayList<>();
-        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor(bidList.size() * 0.98), bidList.size() - 1);
-        for (Bid bid:highestUserBids) {
-            //TO DO:
-            // jonny black
-            double utility = predictAddtiveSpace.getUtility(bid);
-            userUtility.add(utility);
-        }
-        double maxUserUtility = Collections.max(userUtility);
-        Bid maxUserBid = highestUserBids.get(userUtility.indexOf(maxUserUtility));
-//        Bid opponentMax = opponentBidRank.get(opponentBidRank.size() - 1);
-        endPoints[1][0] = opponentUtilities.get(maxUserBid);
-        endPoints[1][1] = userUtilities.get(maxUserBid);
-
-        System.out.println("endPoints" + endPoints);
-
-    }
-
-    private void getAvailableBids() {
-        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
-        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
-
-        for (Bid bid: bidList) {
-            Point2D.Double target = new Point2D.Double(opponentUtilities.get(bid), userUtilities.get(bid));
-            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
-
-            if (v >= 0) {
-                availableBids.add(bid);
-            }
-        }
-    }
-
     // TO DO: 调试
-    private Bid generateRandomBidByAvailable() {
+    private Bid generateRandomBidByAvailable(double time) {
         List<Bid> list = new ArrayList<>();
         for (Bid bid: availableBids) {
-            double userUtility = userUtilities.get(bid);
+            double userUtility = predictAddtiveSpace.getUtility(bid);
             if (userUtility >= concessionUtility[0] && userUtility <= concessionUtility[1]) {
                 list.add(bid);
             }
@@ -310,21 +231,106 @@ public class Agent29 extends AbstractNegotiationParty
         } else {
             //如果不能取到这样的点 则在妥协范围里面找
             for (Bid bid: bidList) {
-                double utility = userUtilities.get(bid);
+                double utility = predictAddtiveSpace.getUtility(bid);
                 if (utility >= concessionUtility[0] && utility <= concessionUtility[1]) {
                     list.add(bid);
                 }
             }
             Collections.sort(list, new OpponentBidComparetor());
-            for (Bid bid:list) {
-                System.out.println(opponentUtilities.get(bid));
-            }
-            return list.get(list.size() - 1);
+            System.out.println("opponent utilities " + opponentUtilities.get(list.get(0)) + " " + opponentUtilities.get(list.get(list.size() - 1)));
+            boundSize = list.size() - 1;
+            int minIndex = (int) Math.floor(boundSize * 0.8);
+            int index = rand.nextInt(boundSize - minIndex) + minIndex - 1;
+
+            return list.get(index);
         }
 
 //        int index = rand.nextInt(availableBids.size() - 1);
 //        return availableBids.get(index);
 
+    }
+
+    // elicit rank 会产生额外cost
+    private void elicitRank(Bid bid) {
+        if (!bidList.contains(bid)) {
+            userModel = user.elicitRank(bid, userModel);
+            bidList = userModel.getBidRanking().getBidOrder();
+        }
+
+    }
+
+    private double disagreeUtility(double disagreePercent) {
+        int bidListSize = bidList.size();
+        int disagreeIndex = (int)Math.floor(bidListSize * disagreePercent);
+        double ret = this.predictAddtiveSpace.getUtility(bidList.get(disagreeIndex));
+        return ret;
+    }
+
+//    private void calculateAllUserUtilities() {
+//        for (Bid bid: bidList) {
+//            userUtilities.put(bid, predictAddtiveSpace.getUtility(bid));
+//        }
+//    }
+    private void calculateAllOpponentUtilities() {
+        for (Bid bid:bidList) {
+            //TO DO:
+            //opponent utilities
+            opponentUtilities.put(bid, iaMap.JBpredict(bid));
+        }
+        opponentBidRank.addAll(bidList);
+
+        Collections.sort(opponentBidRank, new OpponentBidComparetor());
+    }
+
+
+    private void getEndPoints() {
+        // 我方最高时 对方最高
+        List<Bid> highestUserBids = bidList.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
+        List<Double> oppUtility = new ArrayList<>();
+        for (Bid bid:highestUserBids) {
+            //TO DO:
+            // jonny black
+            double utility = iaMap.JBpredict(bid);
+            oppUtility.add(utility);
+        }
+        double maxOppUtility = Collections.max(oppUtility);
+        Bid maxOppBid = highestUserBids.get(oppUtility.indexOf(maxOppUtility));
+//        Bid userMax = bidList.get(bidList.size() - 1);
+        endPoints[0][0] = opponentUtilities.get(maxOppBid);
+        endPoints[0][1] = predictAddtiveSpace.getUtility(maxOppBid);
+
+        // 对方最高时 我方最高
+        List<Double> userUtility = new ArrayList<>();
+        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
+        for (Bid bid:highestUserBids) {
+            //TO DO:
+            // jonny black
+            double utility = predictAddtiveSpace.getUtility(bid);
+            userUtility.add(utility);
+        }
+        double maxUserUtility = Collections.max(userUtility);
+        Bid maxUserBid = highestUserBids.get(userUtility.indexOf(maxUserUtility));
+//        Bid opponentMax = opponentBidRank.get(opponentBidRank.size() - 1);
+        endPoints[1][0] = opponentUtilities.get(maxUserBid);
+        endPoints[1][1] = predictAddtiveSpace.getUtility(maxUserBid);
+
+        System.out.println("endPoints" + endPoints);
+
+    }
+
+    private void getAvailableBids() {
+        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
+
+        for (Bid bid: bidList) {
+            // 注意 bid很少的时候会用elicit
+            Point2D.Double target = new Point2D.Double(opponentUtilities.get(bid), predictAddtiveSpace.getUtility(bid));
+            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+
+            if (v >= 0) {
+                availableBids.add(bid);
+            }
+        }
     }
 
 }
