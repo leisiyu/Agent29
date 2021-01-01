@@ -11,6 +11,7 @@ import genius.core.actions.EndNegotiation;
 import genius.core.actions.Offer;
 import genius.core.parties.AbstractNegotiationParty;
 import genius.core.parties.NegotiationInfo;
+import genius.core.uncertainty.BidRanking;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
 import genius.core.uncertainty.ExperimentalUserModel;
@@ -31,6 +32,7 @@ public class Agent29 extends AbstractNegotiationParty
     private int jonnyBlackRound = 10;  //计数 每10轮重新计算
     private double userResValue;
     private double opponentResValue;
+    private Bid maxBidForme;
 
     List<Bid> bidList = new ArrayList<>(); // bid总列表
     //    private HashMap<Bid, Double> userUtilities = new HashMap<Bid, Double>(); //user所有bid的utility
@@ -68,6 +70,7 @@ public class Agent29 extends AbstractNegotiationParty
         // TO DO:
         // jonny black
         iaMap = new IaMap(userModel);
+        this.maxBidForme = userModel.getBidRanking().getMaximalBid();
 
         //test
 //        e = (ExperimentalUserModel) userModel;
@@ -141,6 +144,7 @@ public class Agent29 extends AbstractNegotiationParty
         return 0.25;
     }
 
+    // TO DO
     private Boolean checkIfBidCanBeAccepted(Bid bid, Double time) {
         // TO DO
         // 考虑小的domain
@@ -199,31 +203,50 @@ public class Agent29 extends AbstractNegotiationParty
     }
 
     private Bid generateRandomBidByRank(double threshold) {
-        int bidOrderSize = bidList.size() - 1;
-        int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
-        int randomInt = rand.nextInt(bidOrderSize - min + 1) + min;
-
-        return bidList.get(randomInt);
+        int bidOrderSize = bidList.size();
+        int min = (int) Math.floor((bidOrderSize - 1) * (1 - threshold));
+        for (int i = min; i < bidOrderSize; i ++) {
+            if (rand.nextDouble() < 0.5) {
+                return bidList.get(i);
+            }
+        }
+        return bidList.get(bidOrderSize-1);
     }
 
     // TO DO: 调试
     private Bid generateRandomBidByAvailable(double time) {
         List<Bid> list = new ArrayList<>();
+        // 1. try to offer the Nash Point
         for (Bid bid: availableBids) {
             double userUtility = predictAddtiveSpace.getUtility(bid);
             if (userUtility >= concessionUtility[0] && userUtility <= concessionUtility[1]) {
                 list.add(bid);
             }
         }
-        int boundSize = list.size() - 1;
-        List<Double> nashValueList = new ArrayList<>();
-        for (int i = 0; i < list.size(); i ++) {
-            double nashValue = predictAddtiveSpace.getUtility(list.get(i)) * opponentUtilities.get(list.get(i));
-            nashValueList.add(nashValue);
+        if (list.size() > 0) {
+            List<Double> nashValueList = new ArrayList<>();
+            for (int i = 0; i < list.size(); i++) {
+                double nashValue = predictAddtiveSpace.getUtility(list.get(i)) * opponentUtilities.get(list.get(i));
+                nashValueList.add(nashValue);
+            }
+            double bestNashValue = Collections.max(nashValueList);
+            int index = nashValueList.indexOf(bestNashValue);
+            return list.get(index);
+        } else {
+            // 2. if no possible Nash Points, offer some bids that
+            for (Bid bid: bidList) {
+                double utility = predictAddtiveSpace.getUtility(bid);
+                double oppUtility = opponentUtilities.get(bid);
+                if (utility >= concessionUtility[0] && utility <= concessionUtility[1] && utility > oppUtility) {
+                    list.add(bid);
+                }
+            }
+            if (list.size() == 0) {
+                return this.maxBidForme;
+            }
+            Collections.sort(list, new OpponentBidComparetor());
+            return list.get(list.size()-1);
         }
-        double bestNashValue = Collections.max(nashValueList);
-        int index = nashValueList.indexOf(bestNashValue);
-        return list.get(index);
 
 //        if (boundSize > 0) {
 //            Collections.sort(list, new OpponentBidComparetor());
