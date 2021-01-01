@@ -20,6 +20,7 @@ public class Agent29 extends AbstractNegotiationParty
     private AdditiveUtilitySpace predictAddtiveSpace;
 
     private IaMap iaMap;
+    private Random rand = new Random();
 
     private Bid lastOffer;
     private double threshold = 0.1;
@@ -127,7 +128,7 @@ public class Agent29 extends AbstractNegotiationParty
         } else if (time < 0.3) {
             return 0.18;
         }
-        return 0.2;
+        return 0.3;
     }
 
     private Boolean checkIfBidCanBeAccepted(Bid bid) {
@@ -139,10 +140,25 @@ public class Agent29 extends AbstractNegotiationParty
 
         double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
         System.out.println("last offer utility: "+ userLastOfferUtility);
-        if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
-            && userLastOfferUtility >= concessionUtility[0]) {
-            return true;
+
+        // TO DO
+        // 考虑小的domain
+        if (bidList.size() > 100) {
+            if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
+                    && userLastOfferUtility >= concessionUtility[0]) {
+                return true;
+            }
+        } else {
+            // TO DO
+            // 如果初始给的bids数量太小 直接按排序找
+            if (! bidList.contains(bid)) {
+                elicitRank(bid);
+            }
+            int index = bidList.indexOf(bid);
+            return ((double) index / bidList.size()) >= concessionUtility[1];
+
         }
+
 
         return false;
     }
@@ -150,13 +166,13 @@ public class Agent29 extends AbstractNegotiationParty
     // TO DO: 调整
     private void concessionByTime(double time) {
          if (time >= 0.5 && time <0.7) {
-            concessionUtility[0] = 0.8;
+            concessionUtility[0] = 0.9;
             concessionUtility[1] = 1;
         } else if (time >= 0.7 && time <0.9) {
-            concessionUtility[0] = 0.8;
+            concessionUtility[0] = 0.85;
             concessionUtility[1] = 0.95;
         } else if (time >= 0.9 && time <0.95) {
-            concessionUtility[0] = 0.75;
+            concessionUtility[0] = 0.8;
             concessionUtility[1] = 0.9;
         } else {
             concessionUtility[0] = 0.7;
@@ -166,7 +182,6 @@ public class Agent29 extends AbstractNegotiationParty
 
     private Bid generateRandomBidByRank(double threshold) {
         int bidOrderSize = bidList.size();
-        Random rand = new Random();
         int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
         int randomInt = rand.nextInt(bidOrderSize - min) + min;
 
@@ -177,6 +192,7 @@ public class Agent29 extends AbstractNegotiationParty
     private void elicitRank(Bid bid) {
         if (!bidList.contains(bid)) {
             userModel = user.elicitRank(bid, userModel);
+            bidList = userModel.getBidRanking().getBidOrder();
         }
 
     }
@@ -262,7 +278,7 @@ public class Agent29 extends AbstractNegotiationParty
         }
         int boundSize = list.size() - 1;
 
-        if (boundSize >= 0) {
+        if (boundSize > 0) {
             int index = rand.nextInt(boundSize);
             return list.get(index);
         } else {
