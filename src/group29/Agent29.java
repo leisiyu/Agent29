@@ -83,7 +83,7 @@ public class Agent29 extends AbstractNegotiationParty
             threshold = getThresholdByTime(time);
             return new Offer(getPartyId(), generateRandomBidByRank(threshold));
         } else if (time < 0.9999) {
-            if (checkIfBidCanBeAccepted(lastOffer)) {
+            if (checkIfBidCanBeAccepted(lastOffer, time)) {
                 return new Accept(getPartyId(), lastOffer);
             } else {
                 // TO DO:
@@ -136,10 +136,10 @@ public class Agent29 extends AbstractNegotiationParty
         } else if (time < 0.3) {
             return 0.18;
         }
-        return 0.3;
+        return 0.25;
     }
 
-    private Boolean checkIfBidCanBeAccepted(Bid bid) {
+    private Boolean checkIfBidCanBeAccepted(Bid bid, Double time) {
         Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
         Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
 
@@ -152,10 +152,15 @@ public class Agent29 extends AbstractNegotiationParty
         // TO DO
         // 考虑小的domain
         if (bidList.size() > 100) {
-            if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
-                    && userLastOfferUtility >= concessionUtility[0]) {
-                return true;
+            if (time < 0.95) {
+                if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
+                        && userLastOfferUtility >= concessionUtility[0]) {
+                    return true;
+                }
+            } else {
+                return userLastOfferUtility >= concessionUtility[0];
             }
+
         } else {
             // TO DO
             // 如果初始给的bids数量太小 直接按排序找
@@ -190,10 +195,10 @@ public class Agent29 extends AbstractNegotiationParty
 
     private Bid generateRandomBidByRank(double threshold) {
         int bidOrderSize = bidList.size();
-        int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
-        int randomInt = rand.nextInt(bidOrderSize - min) + min;
+        int min = (int) Math.floor(bidOrderSize * (1 - threshold));
+        int randomInt = rand.nextInt(bidOrderSize - min) + min - 1;
 
-        return bidList.get(randomInt - 1);
+        return bidList.get(randomInt);
     }
 
     // elicit rank 会产生额外cost
@@ -207,7 +212,7 @@ public class Agent29 extends AbstractNegotiationParty
 
     private double disagreeUtility(double disagreePercent) {
         int bidListSize = bidList.size();
-        int disagreeIndex = (int)Math.ceil(bidListSize * disagreePercent);
+        int disagreeIndex = (int)Math.floor(bidListSize * disagreePercent);
         double ret = this.predictAddtiveSpace.getUtility(bidList.get(disagreeIndex));
         return ret;
     }
@@ -231,7 +236,7 @@ public class Agent29 extends AbstractNegotiationParty
 
     private void getEndPoints() {
         // 我方最高时 对方最高
-        List<Bid> highestUserBids = bidList.subList((int) Math.ceil(bidList.size() * 0.98), bidList.size() - 1);
+        List<Bid> highestUserBids = bidList.subList((int) Math.floor(bidList.size() * 0.98), bidList.size() - 1);
         List<Double> oppUtility = new ArrayList<>();
         for (Bid bid:highestUserBids) {
             //TO DO:
@@ -247,7 +252,7 @@ public class Agent29 extends AbstractNegotiationParty
 
         // 对方最高时 我方最高
         List<Double> userUtility = new ArrayList<>();
-        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.ceil(bidList.size() * 0.98), bidList.size() - 1);
+        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor(bidList.size() * 0.98), bidList.size() - 1);
         for (Bid bid:highestUserBids) {
             //TO DO:
             // jonny black
@@ -292,8 +297,12 @@ public class Agent29 extends AbstractNegotiationParty
         if (boundSize > 0) {
             Collections.sort(list, new OpponentBidComparetor());
             // 对手的utility大的里面随机一个
-            int minIndex = (int) Math.ceil(boundSize / 2);
-            int index = rand.nextInt(boundSize - minIndex) + minIndex;
+            int minIndex = (int) Math.floor(boundSize * 0.8);
+            int index = 0;
+            if (boundSize - minIndex > 0) {
+                index = rand.nextInt(boundSize - minIndex) + minIndex - 1;
+            }
+            System.out.println("test index "+ index + " "+ list.size());
             Bid bid = list.get(index);
 
             System.out.println("my offer:"+ predictAddtiveSpace.getUtility(bid));
