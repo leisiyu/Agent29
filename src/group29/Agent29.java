@@ -197,9 +197,9 @@ public class Agent29 extends AbstractNegotiationParty
     }
 
     private Bid generateRandomBidByRank(double threshold) {
-        int bidOrderSize = bidList.size();
-        int min = (int) Math.floor(bidOrderSize * (1 - threshold));
-        int randomInt = rand.nextInt(bidOrderSize - min) + min - 1;
+        int bidOrderSize = bidList.size() - 1;
+        int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
+        int randomInt = rand.nextInt(bidOrderSize - min + 1) + min;
 
         return bidList.get(randomInt);
     }
@@ -218,10 +218,10 @@ public class Agent29 extends AbstractNegotiationParty
         if (boundSize > 0) {
             Collections.sort(list, new OpponentBidComparetor());
             // 对手的utility大的里面随机一个
-            int minIndex = (int) Math.floor(boundSize * 0.8);
+            int minIndex = (int) Math.ceil(boundSize * 0.8);
             int index = 0;
             if (boundSize - minIndex > 0) {
-                index = rand.nextInt(boundSize - minIndex) + minIndex - 1;
+                index = rand.nextInt(boundSize - minIndex + 1) + minIndex;
             }
             System.out.println("test index "+ index + " "+ list.size());
             Bid bid = list.get(index);
@@ -239,8 +239,8 @@ public class Agent29 extends AbstractNegotiationParty
             Collections.sort(list, new OpponentBidComparetor());
             System.out.println("opponent utilities " + opponentUtilities.get(list.get(0)) + " " + opponentUtilities.get(list.get(list.size() - 1)));
             boundSize = list.size() - 1;
-            int minIndex = (int) Math.floor(boundSize * 0.8);
-            int index = rand.nextInt(boundSize - minIndex) + minIndex - 1;
+            int minIndex = (int) Math.ceil(boundSize * 0.8);
+            int index = rand.nextInt(boundSize - minIndex + 1) + minIndex;
 
             return list.get(index);
         }
