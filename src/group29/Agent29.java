@@ -1,259 +1,349 @@
 package group29;
 
-import genius.core.Bid;
-import genius.core.issue.Issue;
-import genius.core.issue.IssueDiscrete;
-import genius.core.issue.Value;
-import genius.core.issue.ValueDiscrete;
-import genius.core.uncertainty.AdditiveUtilitySpaceFactory;
-import genius.core.uncertainty.UserModel;
-import genius.core.utility.AbstractUtilitySpace;
-import genius.core.utility.AdditiveUtilitySpace;
-import genius.core.utility.EvaluatorDiscrete;
-
+import java.awt.geom.Point2D;
 import java.util.*;
 
-public class UserPrefElicit {
+import genius.core.AgentID;
+import genius.core.Bid;
+import genius.core.actions.Accept;
+import genius.core.actions.Action;
+import genius.core.actions.EndNegotiation;
+import genius.core.actions.Offer;
+import genius.core.parties.AbstractNegotiationParty;
+import genius.core.parties.NegotiationInfo;
+import genius.core.utility.AbstractUtilitySpace;
+import genius.core.utility.AdditiveUtilitySpace;
+import genius.core.uncertainty.ExperimentalUserModel;
+import genius.core.utility.UncertainAdditiveUtilitySpace;
 
-    private UserModel userModel;  // User Uncertainty
-    private Random randomSeed = new Random(); // generate random seed
-    private List<AbstractUtilitySpace> population = new ArrayList<>();  // initial population in GA
-    private int initPopSize = 10000;          // size of population
-    private int maxIterNum = 50;       // iteration number of GA
-    private double crossoverRate = 0.1; // crossover rate
-    private double mutationRate = 0.04; // mutation rate
-    private double M = 50.0f;
-    private double r = 0.9;
-
-    public UserPrefElicit(UserModel userModel) {
-        this.userModel = userModel;
-    }
-
-    public AbstractUtilitySpace geneticAlgorithm() {
-
-        // 1. initial population
-        for (int i = 0; i < initPopSize; i ++) {
-            population.add(getRandomChromosome());
-        }
-        double worstFitness = 0.0f;
-
-        for (int i = 0; i < maxIterNum; i ++) {
-
-            // 2. get fitness of each chromosome
-            List <Double> adaptiveValueList = new ArrayList<>();
-
-            for (int j = 0; j < population.size(); j ++) {
-                adaptiveValueList.add(getAdaptiveValue(population.get(j), i));
-            }
-
-            // System.out.println("Average fitness: " + getAverage(adaptiveValueList));
-
-            // 3. selection
-            population = selection(population, adaptiveValueList);
-            int popSize = population.size();
-
-            // 4. crossover and mutation
-            for (int j = 0; j < popSize*crossoverRate; j ++) {
-                AdditiveUtilitySpace father = (AdditiveUtilitySpace) population.get(randomSeed.nextInt(popSize));
-                AdditiveUtilitySpace mother = (AdditiveUtilitySpace) population.get(randomSeed.nextInt(popSize));
-                AbstractUtilitySpace child = crossover(father, mother);
-                population.add(child);
-            }
-        }
-
-        // select the best one in the final population to be our userPref
-        List<Double> adaptiveValueList = new ArrayList<> ();
-        for (AbstractUtilitySpace pop: population) {
-            adaptiveValueList.add(getAdaptiveValue(pop, maxIterNum));
-        }
-        double bestFitness = Collections.max(adaptiveValueList);
-        int index = adaptiveValueList.indexOf(bestFitness);
-        return population.get(index);
-    }
-
-    // generate random AbstractUtilitySpace
-    // this part is the same from
-    private AbstractUtilitySpace getRandomChromosome() {
-        AdditiveUtilitySpaceFactory additiveUtilitySpaceFactory =
-                new AdditiveUtilitySpaceFactory(userModel.getDomain());
-        List<Issue> issues = additiveUtilitySpaceFactory.getDomain().getIssues();
-        for (Issue issue: issues) {
-            additiveUtilitySpaceFactory.setWeight(issue, randomSeed.nextDouble());
-            IssueDiscrete values = (IssueDiscrete) issue;
-            for (Value value:values.getValues()) {
-                additiveUtilitySpaceFactory.setUtility(issue, (ValueDiscrete) value, randomSeed.nextDouble());
-            }
-        }
-        additiveUtilitySpaceFactory.normalizeWeights();
-        return additiveUtilitySpaceFactory.getUtilitySpace();
-    }
-
-    private double getAdaptiveValue(AbstractUtilitySpace abstractUtilitySpace, int iterNum) {
-
-        // 1. generate validationBidList
-        int validationBidListSize = 1000; // size of validationBidList
-        double M = 3;
-        double r = 0.9;
-
-        List<Bid> validationBidListAll = userModel.getBidRanking().getBidOrder();
-        List<Bid> validationBidList = new ArrayList<>();
-
-        int validationBidListAllSize = validationBidListAll.size();
-
-        // we need to sample the list to make the size smaller to calculate fast
-        int sampleGap = 1 + validationBidListAllSize / validationBidListSize;
-        for (int i = 0; i < validationBidListAllSize; i += sampleGap) {
-            validationBidList.add(validationBidListAll.get(i));
-        }
-
-        validationBidListSize = validationBidList.size();
-
-        // 2. get the training utility of all the bids in validationBidList (this is now in the order from low to high)
-        // and save the value to trainUtilityOrder(TreeMap) to order the training utility
-        TreeMap<Integer, Double> trainUtilityMap = new TreeMap(); // Key: original index, Value: utility value
-
-        for (int i = 0; i < validationBidListSize; i ++) {
-            trainUtilityMap.put(i, abstractUtilitySpace.getUtility(validationBidList.get(i)));
-        }
-
-        // 3. use TreeMap to order our trainUtilityList
-        // order by value and get new indexes
-        List<Map.Entry<Integer, Double>> compareRankList = new ArrayList<>(trainUtilityMap.entrySet());
-        compareRankList.sort(new TreeMapComp());
-
-        // 4. calculate the objective value
-        // obj = sum(abs(new index - original index))
-        double obj = 0;
-        for (int i = 0; i < validationBidListSize; i ++) {
-            int gap = Math.abs(compareRankList.get(i).getKey()-i);
-            obj += gap * gap;
-        }
-        obj = obj / validationBidListSize;
-
-        // 5. get the fitness of the input abstractUtilitySpace
-        double fitness = -20 * Math.log(obj) + 300;
-        fitness = fitness + M * Math.pow(r, iterNum);
-        return fitness;
-    }
-
-    // selection
-    private List<AbstractUtilitySpace> selection(List<AbstractUtilitySpace> population, List<Double> fitnessList) {
-        int eliteSize = 2; // size of selected elite
-        int eliteGroupSize = 10; // size of selected elite group
-        int[] eliteGroupIndexList = new int[eliteGroupSize];
-        int populationSize = fitnessList.size();
-        List<AbstractUtilitySpace> nextPopulation = new ArrayList<>();
-
-        // Deep copy to find top eliteGroupSize chromosome
-        List<Double> copyFitnessList = new ArrayList<>();
-        for (Double aDouble : fitnessList) {
-            copyFitnessList.add(aDouble);
-        }
-
-        for (int i = 0; i < eliteGroupSize; i ++) {
-            double maxFitness = Collections.max(copyFitnessList);
-            double minFitness = Collections.min(copyFitnessList);
-            int index = copyFitnessList.indexOf(maxFitness);
-            eliteGroupIndexList[i] = index;
-            // set the current max fitness to the min one
-            copyFitnessList.set(index, minFitness);
-        }
-
-        int num = 0;
-        while (num < eliteSize) {
-            int tmp = randomSeed.nextInt(10);
-            if (eliteGroupIndexList[tmp] != -1) {
-                nextPopulation.add(population.get(eliteGroupIndexList[tmp]));
-                eliteGroupIndexList[tmp] = -1;
-                num ++;
-            }
-        }
-
-        // Linear Ranking Selection
-        // 1. Sort the fitness
-        TreeMap<Integer, Double> fitnessMap = new TreeMap(); // Key: original index, Value: utility value
-
-        for (int i = 0; i < populationSize; i ++) {
-            fitnessMap.put(i, fitnessList.get(i));
-        }
-
-        List<Map.Entry<Integer, Double>> compareRankList = new ArrayList<>(fitnessMap.entrySet());
-        compareRankList.sort(new TreeMapComp());
-
-        // 2. Based on Pmin+(Pmax-Pmin)*(i-1)/(N-1)
-        double Pmax = 0.95;
-        double Pmin = 0.05;
-        for (int i = 0; i < populationSize; i ++) {
-            double Pi = Pmin + (Pmax - Pmin) * (i-1) / (populationSize-1);
-            double selectP = randomSeed.nextDouble();
-            if (selectP <= Pi) {
-                nextPopulation.add(population.get(compareRankList.get(i).getKey()));
-            }
-        }
-        return nextPopulation;
-    }
-
-    private AbstractUtilitySpace crossover(AdditiveUtilitySpace father, AdditiveUtilitySpace mother) {
-        double fatherGene;
-        double motherGene;
-        double childGene;
-        double shiftStep = 0.35; // shift step to mom or dad
-
-        AdditiveUtilitySpaceFactory additiveUtilitySpaceFactory = new AdditiveUtilitySpaceFactory(userModel.getDomain());
-        List<IssueDiscrete> issueList = additiveUtilitySpaceFactory.getIssues();
-        for (IssueDiscrete issue : issueList) {
-            fatherGene = father.getWeight(issue);
-            motherGene = mother.getWeight(issue);
-            childGene = getCrossoverGene(shiftStep, fatherGene, motherGene);
-            additiveUtilitySpaceFactory.setWeight(issue, childGene);
-
-            for (ValueDiscrete value : issue.getValues()) {
-                fatherGene = ((EvaluatorDiscrete) father.getEvaluator(issue)).getDoubleValue(value);
-                motherGene = ((EvaluatorDiscrete) mother.getEvaluator(issue)).getDoubleValue(value);
-                childGene = getCrossoverGene(shiftStep, fatherGene, motherGene);
-                additiveUtilitySpaceFactory.setUtility(issue, value, childGene);
-            }
-        }
-        additiveUtilitySpaceFactory.normalizeWeights();
-        return additiveUtilitySpaceFactory.getUtilitySpace();
-    }
-
-    private double getAverage(List<Double> list) {
-        double sum = 0;
-        for (Double aDouble : list) {
-            sum += aDouble;
-        }
-        return sum / list.size();
-    }
-
-    private double getCrossoverGene(double shiftStep, double fatherGene, double motherGene) {
-        double unionGene = fatherGene + motherGene / 2;
-        double childGene;
-        double ShiftGene = shiftStep * Math.abs(fatherGene-motherGene);
-        
-        if (randomSeed.nextDouble() > 0.5) {
-            childGene = unionGene + ShiftGene;
-        } else {
-            childGene = unionGene - ShiftGene;
-            if (childGene < 0.01) childGene = 0.01;
-        }
-
-        // mutation
-        if (randomSeed.nextDouble() < mutationRate) {
-            childGene = randomSeed.nextDouble();
-        }
-
-        return childGene;
-    }
-}
-
-class TreeMapComp implements Comparator<Map.Entry<Integer, Double>>
+public class Agent29 extends AbstractNegotiationParty
 {
-    @Override
-    public int compare(Map.Entry<Integer, Double> o1, Map.Entry<Integer, Double> o2) {
-        int flag = o1.getValue().compareTo(o2.getValue());
-        if (flag == 0)
-            return o1.getKey().compareTo(o2.getKey());
-        return flag;
+    private AbstractUtilitySpace predictAbstractSpace;
+    private AdditiveUtilitySpace predictAddtiveSpace;
+//    private ExperimentalUserModel e;
+//    private UncertainAdditiveUtilitySpace realUSpace;
+
+    private IaMap iaMap;
+    private Random rand = new Random();
+
+    private Bid lastOffer;
+    private double threshold = 0.1;
+    private int jonnyBlackRound = 10;  //计数 每10轮重新计算
+    private double userResValue;
+    private double opponentResValue;
+
+    List<Bid> bidList = new ArrayList<>(); // bid总列表
+    //    private HashMap<Bid, Double> userUtilities = new HashMap<Bid, Double>(); //user所有bid的utility
+    private HashMap<Bid, Double> opponentUtilities = new HashMap<Bid, Double>(); // 对手所有bid的utility
+    private List<Bid> opponentBidRank = new ArrayList<>(); //对手根据utility排序后的bid列表
+    private double[][] endPoints = new double[2][2]; //筛选bid的直线的两个点
+    List<Bid> availableBids = new ArrayList<>();  //可发出的bid
+    double[] concessionUtility = {0.8, 0.95};
+
+    public class OpponentBidComparetor implements Comparator<Bid> {
+        @Override
+        public int compare(Bid o1, Bid o2) {
+            if (opponentUtilities.get(o1) > opponentUtilities.get(o2)) {
+                return 1;
+            } else if (opponentUtilities.get(o1) < opponentUtilities.get(o2)) {
+                return -1;
+            } else {
+                return 0;
+            }
+        }
     }
+
+    @Override
+    public void init(NegotiationInfo info)
+    {
+        super.init(info);
+        bidList = userModel.getBidRanking().getBidOrder();
+
+        //userModel
+        UserPrefElicit userPref = new UserPrefElicit(userModel);
+        predictAbstractSpace = userPref.geneticAlgorithm();
+        predictAddtiveSpace = (AdditiveUtilitySpace) predictAbstractSpace;
+//        calculateAllUserUtilities();
+
+        // TO DO:
+        // jonny black
+        iaMap = new IaMap(userModel);
+
+        //test
+//        e = (ExperimentalUserModel) userModel;
+//        realUSpace = e.getRealUtilitySpace();
+    }
+
+    @Override
+    public Action chooseAction(List<Class<? extends Action>> possibleActions)
+    {
+        double time = timeline.getTime();
+        concessionByTime(time);
+
+        // 时间小于0.5 只发最高的offer 不接受
+        if (time < 0.5) {
+            threshold = getThresholdByTime(time);
+            return new Offer(getPartyId(), generateRandomBidByRank(threshold));
+        } else if (time < 0.9999) {
+            if (checkIfBidCanBeAccepted(lastOffer, time)) {
+                return new Accept(getPartyId(), lastOffer);
+            } else {
+                // TO DO:
+                if (jonnyBlackRound == 10) {
+                    jonnyBlackRound = 0;
+                    // TO DO: jonny black
+                    calculateAllOpponentUtilities();
+                    getEndPoints();
+                    getAvailableBids();
+                }
+                jonnyBlackRound += 1;
+                return new Offer(getPartyId(), generateRandomBidByAvailable(time));
+            }
+        } else {
+            return new EndNegotiation(getPartyId());
+        }
+
+    }
+    @Override
+    public void receiveMessage(AgentID sender, Action action)
+    {
+        if (action instanceof Offer)
+        {
+            lastOffer = ((Offer) action).getBid();
+            if (lastOffer != null) {
+                //TO DO:
+                //jonny black evaluate
+                iaMap.JonnyBlack(lastOffer);
+            }
+        }
+    }
+
+    @Override
+    public String getDescription()
+    {
+        return "I am the greatest negotiation agent!";
+    }
+
+    private double getThresholdByTime(double time) {
+        if (time < 0.05) {
+            return 0.01;
+        } else if (time < 0.1) {
+            return 0.03;
+        } else if (time < 0.15) {
+            return 0.05;
+        } else if (time < 0.2) {
+            return 0.08;
+        } else if (time < 0.25) {
+            return 0.13;
+        } else if (time < 0.3) {
+            return 0.18;
+        }
+        return 0.25;
+    }
+
+    private Boolean checkIfBidCanBeAccepted(Bid bid, Double time) {
+        // TO DO
+        // 考虑小的domain
+        // 有个concession 需要改成比例
+        if (bidList.size() > 100) {
+            Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+            Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
+
+            Point2D.Double target = new Point2D.Double(iaMap.JBpredict(bid), predictAddtiveSpace.getUtility(bid));
+            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+
+            double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
+            System.out.println("last offer utility: "+ userLastOfferUtility);
+
+            if (time < 0.95) {
+                if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
+                        && userLastOfferUtility >= concessionUtility[0]) {
+                    return true;
+                }
+            } else if (time < 0.99){
+                return userLastOfferUtility >= concessionUtility[0];
+            } else {
+                return true;
+            }
+
+        } else {
+            // TO DO
+            // 如果初始给的bids数量太小 直接按排序找
+            if (! bidList.contains(bid)) {
+                elicitRank(bid);
+            }
+            int index = bidList.indexOf(bid);
+            return ((double) index / bidList.size()) >= concessionUtility[0];
+
+        }
+
+
+        return false;
+    }
+
+    // TO DO: 调整
+    private void concessionByTime(double time) {
+        if (time >= 0.5 && time <0.7) {
+            concessionUtility[0] = 0.9;
+            concessionUtility[1] = 1;
+        } else if (time >= 0.7 && time <0.9) {
+            concessionUtility[0] = 0.85;
+            concessionUtility[1] = 0.95;
+        } else if (time >= 0.9 && time <0.95) {
+            concessionUtility[0] = 0.75;
+            concessionUtility[1] = 0.9;
+        } else {
+            concessionUtility[0] = 0.7;
+            concessionUtility[1] = 0.9;
+        }
+    }
+
+    private Bid generateRandomBidByRank(double threshold) {
+        int bidOrderSize = bidList.size() - 1;
+        int min = (int) Math.ceil(bidOrderSize * (1 - threshold));
+        int randomInt = rand.nextInt(bidOrderSize - min + 1) + min;
+
+        return bidList.get(randomInt);
+    }
+
+    // TO DO: 调试
+    private Bid generateRandomBidByAvailable(double time) {
+        List<Bid> list = new ArrayList<>();
+        for (Bid bid: availableBids) {
+            double userUtility = predictAddtiveSpace.getUtility(bid);
+            if (userUtility >= concessionUtility[0] && userUtility <= concessionUtility[1]) {
+                list.add(bid);
+            }
+        }
+        int boundSize = list.size() - 1;
+        List<Double> nashValueList = new ArrayList<>();
+        for (int i = 0; i < list.size(); i ++) {
+            double nashValue = predictAddtiveSpace.getUtility(list.get(i)) * opponentUtilities.get(list.get(i));
+            nashValueList.add(nashValue);
+        }
+        double bestNashValue = Collections.max(nashValueList);
+        int index = nashValueList.indexOf(bestNashValue);
+        return list.get(index);
+
+//        if (boundSize > 0) {
+//            Collections.sort(list, new OpponentBidComparetor());
+//            // 对手的utility大的里面随机一个
+//            int minIndex = (int) Math.ceil(boundSize * 0.8);
+//            int index = 0;
+//            if (boundSize - minIndex > 0) {
+//                index = rand.nextInt(boundSize - minIndex + 1) + minIndex;
+//            }
+//            System.out.println("test index "+ index + " "+ list.size());
+//            Bid bid = list.get(index);
+//
+//            System.out.println("my offer:"+ predictAddtiveSpace.getUtility(bid));
+//            return bid;
+//        } else {
+//            //如果不能取到这样的点 则在妥协范围里面找
+//            for (Bid bid: bidList) {
+//                double utility = predictAddtiveSpace.getUtility(bid);
+//                if (utility >= concessionUtility[0] && utility <= concessionUtility[1]) {
+//                    list.add(bid);
+//                }
+//            }
+//            Collections.sort(list, new OpponentBidComparetor());
+//            System.out.println("opponent utilities " + opponentUtilities.get(list.get(0)) + " " + opponentUtilities.get(list.get(list.size() - 1)));
+//            boundSize = list.size() - 1;
+//            int minIndex = (int) Math.ceil(boundSize * 0.8);
+//            int index = rand.nextInt(boundSize - minIndex + 1) + minIndex;
+//
+//            return list.get(index);
+//        }
+
+//        int index = rand.nextInt(availableBids.size() - 1);
+//        return availableBids.get(index);
+
+    }
+
+    // elicit rank 会产生额外cost
+    private void elicitRank(Bid bid) {
+        if (!bidList.contains(bid)) {
+            userModel = user.elicitRank(bid, userModel);
+            bidList = userModel.getBidRanking().getBidOrder();
+        }
+
+    }
+
+    private double disagreeUtility(double disagreePercent) {
+        int bidListSize = bidList.size();
+        int disagreeIndex = (int)Math.floor(bidListSize * disagreePercent);
+        double ret = this.predictAddtiveSpace.getUtility(bidList.get(disagreeIndex));
+        return ret;
+    }
+
+    //    private void calculateAllUserUtilities() {
+//        for (Bid bid: bidList) {
+//            userUtilities.put(bid, predictAddtiveSpace.getUtility(bid));
+//        }
+//    }
+    private void calculateAllOpponentUtilities() {
+        for (Bid bid:bidList) {
+            //TO DO:
+            //opponent utilities
+            opponentUtilities.put(bid, iaMap.JBpredict(bid));
+        }
+        opponentBidRank.addAll(bidList);
+
+        Collections.sort(opponentBidRank, new OpponentBidComparetor());
+    }
+
+
+    private void getEndPoints() {
+        // 我方最高时 对方最高
+        List<Bid> highestUserBids = bidList.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
+        List<Double> oppUtility = new ArrayList<>();
+        for (Bid bid:highestUserBids) {
+            //TO DO:
+            // jonny black
+            double utility = iaMap.JBpredict(bid);
+            oppUtility.add(utility);
+        }
+        double maxOppUtility = Collections.max(oppUtility);
+        // Bid maxOppBid = highestUserBids.get(oppUtility.indexOf(maxOppUtility));
+        Bid userMax = bidList.get(bidList.size() - 1);
+        endPoints[0][0] = opponentUtilities.get(userMax);
+        endPoints[0][1] = predictAddtiveSpace.getUtility(userMax);
+
+        // 对方最高时 我方最高
+        List<Double> userUtility = new ArrayList<>();
+        List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
+        for (Bid bid:highestUserBids) {
+            //TO DO:
+            // jonny black
+            double utility = predictAddtiveSpace.getUtility(bid);
+            userUtility.add(utility);
+        }
+        double maxUserUtility = Collections.max(userUtility);
+        // Bid maxUserBid = highestUserBids.get(userUtility.indexOf(maxUserUtility));
+        Bid opponentMax = opponentBidRank.get(opponentBidRank.size() - 1);
+        endPoints[1][0] = opponentUtilities.get(opponentMax);
+        endPoints[1][1] = predictAddtiveSpace.getUtility(opponentMax);
+
+        System.out.println("endPoints" + endPoints);
+
+    }
+
+    private void getAvailableBids() {
+        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
+
+        for (Bid bid: bidList) {
+            // 注意 bid很少的时候会用elicit
+            Point2D.Double target = new Point2D.Double(opponentUtilities.get(bid), predictAddtiveSpace.getUtility(bid));
+            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+
+            if (v >= 0) {
+                availableBids.add(bid);
+            }
+        }
+    }
+
 }
+
+
+
