@@ -91,7 +91,7 @@ public class UserPrefElicit {
     private double getAdaptiveValue(AbstractUtilitySpace abstractUtilitySpace, int iterNum) {
 
         // 1. generate validationBidList
-        int validationBidListSize = 500; // size of validationBidList
+        int validationBidListSize = 1000; // size of validationBidList
         double M = 3;
         double r = 0.9;
 
