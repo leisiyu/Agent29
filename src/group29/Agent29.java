@@ -14,17 +14,14 @@ import genius.core.parties.NegotiationInfo;
 import genius.core.uncertainty.BidRanking;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
-import genius.core.uncertainty.ExperimentalUserModel;
-import genius.core.utility.UncertainAdditiveUtilitySpace;
+import genius.core.Domain;
 
 public class Agent29 extends AbstractNegotiationParty
 {
     private AbstractUtilitySpace predictAbstractSpace;
     private AdditiveUtilitySpace predictAddtiveSpace;
-//    private ExperimentalUserModel e;
-//    private UncertainAdditiveUtilitySpace realUSpace;
 
-    private IaMap iaMap;
+    private JonnyBlack jonnyBlack;
     private Random rand = new Random();
 
     private Bid lastOffer;
@@ -35,12 +32,11 @@ public class Agent29 extends AbstractNegotiationParty
     private Bid maxBidForme;
 
     List<Bid> bidList = new ArrayList<>(); // bid总列表
-    //    private HashMap<Bid, Double> userUtilities = new HashMap<Bid, Double>(); //user所有bid的utility
     private HashMap<Bid, Double> opponentUtilities = new HashMap<Bid, Double>(); // 对手所有bid的utility
     private List<Bid> opponentBidRank = new ArrayList<>(); //对手根据utility排序后的bid列表
     private double[][] endPoints = new double[2][2]; //筛选bid的直线的两个点
     List<Bid> availableBids = new ArrayList<>();  //可发出的bid
-    double[] concessionUtility = {0.8, 0.95};
+    double[] concessionUtility = {0.9, 1};
 
     public class OpponentBidComparetor implements Comparator<Bid> {
         @Override
@@ -67,14 +63,11 @@ public class Agent29 extends AbstractNegotiationParty
         predictAddtiveSpace = (AdditiveUtilitySpace) predictAbstractSpace;
 //        calculateAllUserUtilities();
 
-        // TO DO:
+
         // jonny black
-        iaMap = new IaMap(userModel);
+        jonnyBlack = new JonnyBlack(predictAddtiveSpace);
         this.maxBidForme = userModel.getBidRanking().getMaximalBid();
 
-        //test
-//        e = (ExperimentalUserModel) userModel;
-//        realUSpace = e.getRealUtilitySpace();
     }
 
     @Override
@@ -114,9 +107,8 @@ public class Agent29 extends AbstractNegotiationParty
         {
             lastOffer = ((Offer) action).getBid();
             if (lastOffer != null) {
-                //TO DO:
                 //jonny black evaluate
-                iaMap.JonnyBlack(lastOffer);
+                jonnyBlack.updateLastOffer(lastOffer);
             }
         }
     }
@@ -153,7 +145,7 @@ public class Agent29 extends AbstractNegotiationParty
             Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
             Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
 
-            Point2D.Double target = new Point2D.Double(iaMap.JBpredict(bid), predictAddtiveSpace.getUtility(bid));
+            Point2D.Double target = new Point2D.Double(jonnyBlack.getOpponentUtility(bid), predictAddtiveSpace.getUtility(bid));
             double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
 
             double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
@@ -164,10 +156,8 @@ public class Agent29 extends AbstractNegotiationParty
                         && userLastOfferUtility >= concessionUtility[0]) {
                     return true;
                 }
-            } else if (time < 0.99){
-                return userLastOfferUtility >= concessionUtility[0];
             } else {
-                return true;
+                return userLastOfferUtility >= concessionUtility[0];
             }
 
         } else {
@@ -306,9 +296,8 @@ public class Agent29 extends AbstractNegotiationParty
 //    }
     private void calculateAllOpponentUtilities() {
         for (Bid bid:bidList) {
-            //TO DO:
             //opponent utilities
-            opponentUtilities.put(bid, iaMap.JBpredict(bid));
+            opponentUtilities.put(bid, jonnyBlack.getOpponentUtility(bid));
         }
         opponentBidRank.addAll(bidList);
 
@@ -321,9 +310,8 @@ public class Agent29 extends AbstractNegotiationParty
         List<Bid> highestUserBids = bidList.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
         List<Double> oppUtility = new ArrayList<>();
         for (Bid bid:highestUserBids) {
-            //TO DO:
             // jonny black
-            double utility = iaMap.JBpredict(bid);
+            double utility = jonnyBlack.getOpponentUtility(bid);
             oppUtility.add(utility);
         }
         double maxOppUtility = Collections.max(oppUtility);
@@ -336,8 +324,7 @@ public class Agent29 extends AbstractNegotiationParty
         List<Double> userUtility = new ArrayList<>();
         List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
         for (Bid bid:highestUserBids) {
-            //TO DO:
-            // jonny black
+            // user
             double utility = predictAddtiveSpace.getUtility(bid);
             userUtility.add(utility);
         }
