@@ -66,6 +66,7 @@ public class Agent29 extends AbstractNegotiationParty
         // jonny black
         jonnyBlack = new JonnyBlack(predictAddtiveSpace);
         this.maxBidForMe = userModel.getBidRanking().getMaximalBid();
+        this.myNashBid = maxBidForMe;
 
     }
 
@@ -211,7 +212,8 @@ public class Agent29 extends AbstractNegotiationParty
         int bidOrderSize = bidList.size();
         int min = (int) Math.floor((bidOrderSize - 1) * (1 - threshold));
         for (int i = min; i < bidOrderSize; i ++) {
-            if (rand.nextDouble() < 0.5) {
+            double Pi = (i-min+1) / (bidOrderSize-min-1);
+            if (rand.nextDouble() < Pi) {
                 return bidList.get(i);
             }
         }
