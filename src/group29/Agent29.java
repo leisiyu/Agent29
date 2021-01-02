@@ -14,10 +14,9 @@ import genius.core.parties.NegotiationInfo;
 import genius.core.uncertainty.BidRanking;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
-import genius.core.Domain;
 
 public class Agent29 extends AbstractNegotiationParty
-{
+{ 
     private AbstractUtilitySpace predictAbstractSpace;
     private AdditiveUtilitySpace predictAddtiveSpace;
 
@@ -61,8 +60,6 @@ public class Agent29 extends AbstractNegotiationParty
         UserPrefElicit userPref = new UserPrefElicit(userModel);
         predictAbstractSpace = userPref.geneticAlgorithm();
         predictAddtiveSpace = (AdditiveUtilitySpace) predictAbstractSpace;
-//        calculateAllUserUtilities();
-
 
         // jonny black
         jonnyBlack = new JonnyBlack(predictAddtiveSpace);
@@ -151,14 +148,14 @@ public class Agent29 extends AbstractNegotiationParty
             double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
             System.out.println("last offer utility: "+ userLastOfferUtility);
 
-            if (time < 0.95) {
+//            if (time < 0.95) {
                 if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
                         && userLastOfferUtility >= concessionUtility[0]) {
                     return true;
                 }
-            } else {
-                return userLastOfferUtility >= concessionUtility[0];
-            }
+//            } else {
+//                return userLastOfferUtility >= concessionUtility[0];
+//            }
 
         } else {
             // TO DO
@@ -289,11 +286,6 @@ public class Agent29 extends AbstractNegotiationParty
         return ret;
     }
 
-    //    private void calculateAllUserUtilities() {
-//        for (Bid bid: bidList) {
-//            userUtilities.put(bid, predictAddtiveSpace.getUtility(bid));
-//        }
-//    }
     private void calculateAllOpponentUtilities() {
         for (Bid bid:bidList) {
             //opponent utilities

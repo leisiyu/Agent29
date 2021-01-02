@@ -22,6 +22,15 @@ public class OpponentModel {
         this.utilitySpace = utilitySpace;
         bidCounter = new BidCounter(utilitySpace);
         bidCounter.init();
+
+        this.updateAllValue();
+        HashMap<Issue, Float> issue_weight = new HashMap<Issue, Float>();
+        List<Issue> issues = utilitySpace.getDomain().getIssues();
+        for(Issue issue: issues)
+        {
+            issue_weight.put(issue, 0.0f);
+        }
+        this.issue_weight = issue_weight;
     }
 
     public void addBid(Bid bid)
