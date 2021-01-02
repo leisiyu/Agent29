@@ -16,7 +16,7 @@ import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
 
 public class Agent29 extends AbstractNegotiationParty
-{ 
+{
     private AbstractUtilitySpace predictAbstractSpace;
     private AdditiveUtilitySpace predictAddtiveSpace;
 
@@ -28,7 +28,9 @@ public class Agent29 extends AbstractNegotiationParty
     private int jonnyBlackRound = 10;  //计数 每10轮重新计算
     private double userResValue;
     private double opponentResValue;
-    private Bid maxBidForme;
+    private Bid maxBidForMe;
+    private double acceptNashDis = 0;
+    private Bid myNashBid;
 
     List<Bid> bidList = new ArrayList<>(); // bid总列表
     private HashMap<Bid, Double> opponentUtilities = new HashMap<Bid, Double>(); // 对手所有bid的utility
@@ -63,7 +65,7 @@ public class Agent29 extends AbstractNegotiationParty
 
         // jonny black
         jonnyBlack = new JonnyBlack(predictAddtiveSpace);
-        this.maxBidForme = userModel.getBidRanking().getMaximalBid();
+        this.maxBidForMe = userModel.getBidRanking().getMaximalBid();
 
     }
 
@@ -148,15 +150,18 @@ public class Agent29 extends AbstractNegotiationParty
             double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
             System.out.println("last offer utility: "+ userLastOfferUtility);
 
+            if (time < 0.65) {
+                return checkIfNearNashPoint(bid);
+            } else {
 //            if (time < 0.95) {
                 if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
                         && userLastOfferUtility >= concessionUtility[0]) {
                     return true;
                 }
+            }
 //            } else {
 //                return userLastOfferUtility >= concessionUtility[0];
 //            }
-
         } else {
             // TO DO
             // 如果初始给的bids数量太小 直接按排序找
@@ -165,12 +170,25 @@ public class Agent29 extends AbstractNegotiationParty
             }
             int index = bidList.indexOf(bid);
             return ((double) index / bidList.size()) >= concessionUtility[0];
-
         }
 
 
         return false;
     }
+
+    private Boolean checkIfNearNashPoint(Bid bid) {
+        double a = predictAddtiveSpace.getUtility(bid) - predictAddtiveSpace.getUtility(myNashBid);
+        if (!opponentUtilities.containsKey(bid)) {
+            opponentUtilities.put(bid, jonnyBlack.getOpponentUtility(bid));
+        }
+        if (!opponentUtilities.containsKey(myNashBid)) {
+            opponentUtilities.put(myNashBid, jonnyBlack.getOpponentUtility(myNashBid));
+        }
+        double b = opponentUtilities.get(bid) - opponentUtilities.get(myNashBid);
+        double dis = Math.sqrt(Math.pow(a, a) + Math.pow(b, b));
+        return dis <= acceptNashDis;
+    }
+
 
     // TO DO: 调整
     private void concessionByTime(double time) {
@@ -200,7 +218,6 @@ public class Agent29 extends AbstractNegotiationParty
         return bidList.get(bidOrderSize-1);
     }
 
-    // TO DO: 调试
     private Bid generateRandomBidByAvailable(double time) {
         List<Bid> list = new ArrayList<>();
         // 1. try to offer the Nash Point
@@ -218,7 +235,38 @@ public class Agent29 extends AbstractNegotiationParty
             }
             double bestNashValue = Collections.max(nashValueList);
             int index = nashValueList.indexOf(bestNashValue);
-            return list.get(index);
+            int nashValueListSize = nashValueList.size();
+            int nashNeighbourSize = nashValueListSize;
+            if (nashValueListSize >= 4) {
+                nashNeighbourSize = 3;
+            }
+            myNashBid = list.get(index);
+            List<Bid> nashNeighbourList = new ArrayList<>();
+            List<Double> sortNashValueList = new ArrayList<>();
+            for (int i = 0; i < nashValueListSize; i ++) {
+                sortNashValueList.add(nashValueList.get(i));
+            }
+            Collections.sort(sortNashValueList);
+            double disTmp = 0;
+            for (int i = 0; i < nashNeighbourSize; i ++) {
+                int tmpIndex = 0;
+                if (nashNeighbourSize > 3) {
+                    tmpIndex = (sortNashValueList.size()-i-2);
+                } else {
+                    tmpIndex = i;
+                    if (tmpIndex == sortNashValueList.size()) {
+                        break;
+                    }
+                }
+                double tmpValue = sortNashValueList.get(tmpIndex);
+                tmpIndex = nashValueList.indexOf(tmpValue);
+                Bid tmpBid = list.get(tmpIndex);
+                double a = predictAddtiveSpace.getUtility(tmpBid) - predictAddtiveSpace.getUtility(myNashBid);
+                double b = opponentUtilities.get(tmpBid) - opponentUtilities.get(myNashBid);
+                disTmp += Math.sqrt(Math.pow(a, a) + Math.pow(b, b));
+            }
+            this.acceptNashDis = disTmp / (double) nashNeighbourSize;
+            return myNashBid;
         } else {
             // 2. if no possible Nash Points, offer some bids that
             for (Bid bid: bidList) {
@@ -229,7 +277,7 @@ public class Agent29 extends AbstractNegotiationParty
                 }
             }
             if (list.size() == 0) {
-                return this.maxBidForme;
+                return this.maxBidForMe;
             }
             Collections.sort(list, new OpponentBidComparetor());
             return list.get(list.size()-1);
