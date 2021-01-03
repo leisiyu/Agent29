@@ -12,8 +12,10 @@ import genius.core.actions.Offer;
 import genius.core.parties.AbstractNegotiationParty;
 import genius.core.parties.NegotiationInfo;
 import genius.core.uncertainty.BidRanking;
+import genius.core.uncertainty.ExperimentalUserModel;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
+import genius.core.utility.UncertainAdditiveUtilitySpace;
 
 public class Agent29 extends AbstractNegotiationParty
 {
@@ -26,8 +28,7 @@ public class Agent29 extends AbstractNegotiationParty
     private Bid lastOffer;
     private double threshold = 0.1;
     private int jonnyBlackRound = 10;  //计数 每10轮重新计算
-    private double userResValue;
-    private double opponentResValue;
+    private double resValue;
     private Bid maxBidForMe;
     private double acceptNashDis = 0;
     private Bid myNashBid;
@@ -52,6 +53,19 @@ public class Agent29 extends AbstractNegotiationParty
         }
     }
 
+    public class UserBidComparetor implements Comparator<Bid> {
+        @Override
+        public int compare(Bid o1, Bid o2) {
+            if (predictAddtiveSpace.getUtility(o1) > predictAddtiveSpace.getUtility(o2)) {
+                return 1;
+            } else if (predictAddtiveSpace.getUtility(o1) < predictAddtiveSpace.getUtility(o2)) {
+                return -1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
     @Override
     public void init(NegotiationInfo info)
     {
@@ -67,7 +81,18 @@ public class Agent29 extends AbstractNegotiationParty
         jonnyBlack = new JonnyBlack(predictAddtiveSpace);
         this.maxBidForMe = userModel.getBidRanking().getMaximalBid();
         this.myNashBid = maxBidForMe;
+        this.resValue = this.utilitySpace.getReservationValue();
 
+        // test
+//        ExperimentalUserModel e = (ExperimentalUserModel) userModel;
+//        UncertainAdditiveUtilitySpace realUSpace = e.getRealUtilitySpace();
+//        double error = 0;
+//        for (int i = 0; i < bidList.size(); i ++) {
+//            Bid bid = bidList.get(i);
+//            error += Math.abs(predictAddtiveSpace.getUtility(bid)-realUSpace.getUtility(bid));
+//        }
+//        error /= 1000;
+//        System.out.println("Error: " + error);
     }
 
     @Override
@@ -109,6 +134,10 @@ public class Agent29 extends AbstractNegotiationParty
             if (lastOffer != null) {
                 //jonny black evaluate
                 jonnyBlack.updateLastOffer(lastOffer);
+                if (bidList.indexOf(lastOffer) == -1) {
+                    bidList.add(lastOffer);
+                }
+                bidList.sort(new UserBidComparetor());
             }
         }
     }
@@ -149,10 +178,10 @@ public class Agent29 extends AbstractNegotiationParty
             double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
 
             double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
-            System.out.println("last offer utility: "+ userLastOfferUtility);
+            // System.out.println("last offer utility: "+ userLastOfferUtility);
 
-            if (time < 0.65) {
-                return checkIfNearNashPoint(bid);
+            if (checkIfNearNashPoint(bid)) {
+                return true;
             } else {
 //            if (time < 0.95) {
                 if (v >= 0 && userLastOfferUtility <= concessionUtility[1]
@@ -186,7 +215,7 @@ public class Agent29 extends AbstractNegotiationParty
             opponentUtilities.put(myNashBid, jonnyBlack.getOpponentUtility(myNashBid));
         }
         double b = opponentUtilities.get(bid) - opponentUtilities.get(myNashBid);
-        double dis = Math.sqrt(Math.pow(a, a) + Math.pow(b, b));
+        double dis = Math.sqrt(a * a + b * b);
         return dis <= acceptNashDis;
     }
 
@@ -198,26 +227,25 @@ public class Agent29 extends AbstractNegotiationParty
             concessionUtility[1] = 1;
         } else if (time >= 0.7 && time <0.9) {
             concessionUtility[0] = 0.85;
-            concessionUtility[1] = 0.95;
+            concessionUtility[1] = 1;
         } else if (time >= 0.9 && time <0.95) {
-            concessionUtility[0] = 0.75;
-            concessionUtility[1] = 0.9;
+            concessionUtility[0] = 0.825;
+            concessionUtility[1] = 0.95;
         } else {
-            concessionUtility[0] = 0.7;
+            concessionUtility[0] = 0.8;
             concessionUtility[1] = 0.9;
         }
     }
 
     private Bid generateRandomBidByRank(double threshold) {
-        int bidOrderSize = bidList.size();
-        int min = (int) Math.floor((bidOrderSize - 1) * (1 - threshold));
-        for (int i = min; i < bidOrderSize; i ++) {
-            double Pi = (i-min+1) / (bidOrderSize-min-1);
-            if (rand.nextDouble() < Pi) {
-                return bidList.get(i);
+        long numberOfPossibleBids = this.getDomain().getNumberOfPossibleBids();
+        for (int i = 0; i < numberOfPossibleBids; i ++) {
+            Bid bid = this.generateRandomBid();
+            if (predictAddtiveSpace.getUtility(bid) > (1-threshold/2)) {
+                return bid;
             }
         }
-        return bidList.get(bidOrderSize-1);
+        return maxBidForMe;
     }
 
     private Bid generateRandomBidByAvailable(double time) {
@@ -232,15 +260,16 @@ public class Agent29 extends AbstractNegotiationParty
         if (list.size() > 0) {
             List<Double> nashValueList = new ArrayList<>();
             for (int i = 0; i < list.size(); i++) {
-                double nashValue = predictAddtiveSpace.getUtility(list.get(i)) * opponentUtilities.get(list.get(i));
+                double nashValue = (predictAddtiveSpace.getUtility(list.get(i)) - resValue) *
+                        (opponentUtilities.get(list.get(i)) - resValue);
                 nashValueList.add(nashValue);
             }
             double bestNashValue = Collections.max(nashValueList);
             int index = nashValueList.indexOf(bestNashValue);
             int nashValueListSize = nashValueList.size();
             int nashNeighbourSize = nashValueListSize;
-            if (nashValueListSize >= 4) {
-                nashNeighbourSize = 3;
+            if (nashValueListSize >= 10) {
+                nashNeighbourSize = 9;
             }
             myNashBid = list.get(index);
             List<Bid> nashNeighbourList = new ArrayList<>();
@@ -252,7 +281,7 @@ public class Agent29 extends AbstractNegotiationParty
             double disTmp = 0;
             for (int i = 0; i < nashNeighbourSize; i ++) {
                 int tmpIndex = 0;
-                if (nashNeighbourSize > 3) {
+                if (nashNeighbourSize > 9) {
                     tmpIndex = (sortNashValueList.size()-i-2);
                 } else {
                     tmpIndex = i;
@@ -265,24 +294,26 @@ public class Agent29 extends AbstractNegotiationParty
                 Bid tmpBid = list.get(tmpIndex);
                 double a = predictAddtiveSpace.getUtility(tmpBid) - predictAddtiveSpace.getUtility(myNashBid);
                 double b = opponentUtilities.get(tmpBid) - opponentUtilities.get(myNashBid);
-                disTmp += Math.sqrt(Math.pow(a, a) + Math.pow(b, b));
+                disTmp += Math.sqrt(a * a + b * b);
             }
             this.acceptNashDis = disTmp / (double) nashNeighbourSize;
             return myNashBid;
         } else {
-            // 2. if no possible Nash Points, offer some bids that
-            for (Bid bid: bidList) {
-                double utility = predictAddtiveSpace.getUtility(bid);
-                double oppUtility = opponentUtilities.get(bid);
-                if (utility >= concessionUtility[0] && utility <= concessionUtility[1] && utility > oppUtility) {
-                    list.add(bid);
+            long numberOfPossibleBids = this.getDomain().getNumberOfPossibleBids();
+            Bid retBid = this.generateRandomBid();
+            for (int i = 0; i < numberOfPossibleBids; i ++) {
+                Bid bid = this.generateRandomBid();
+                if ((predictAddtiveSpace.getUtility(bid) >= concessionUtility[0]) && (predictAddtiveSpace.getUtility(bid) < concessionUtility[1])) {
+                    if (jonnyBlack.getOpponentUtility(bid) > jonnyBlack.getOpponentUtility(retBid)) {
+                        retBid = bid;
+                    }
                 }
             }
-            if (list.size() == 0) {
-                return this.maxBidForMe;
+            if ((predictAddtiveSpace.getUtility(retBid) >= concessionUtility[0]) && (predictAddtiveSpace.getUtility(retBid) < concessionUtility[1])) {
+                return retBid;
+            } else {
+                return maxBidForMe;
             }
-            Collections.sort(list, new OpponentBidComparetor());
-            return list.get(list.size()-1);
         }
 
 //        if (boundSize > 0) {
@@ -349,6 +380,7 @@ public class Agent29 extends AbstractNegotiationParty
 
     private void getEndPoints() {
         // 我方最高时 对方最高
+        bidList.sort(new UserBidComparetor());
         List<Bid> highestUserBids = bidList.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
         List<Double> oppUtility = new ArrayList<>();
         for (Bid bid:highestUserBids) {
@@ -357,26 +389,26 @@ public class Agent29 extends AbstractNegotiationParty
             oppUtility.add(utility);
         }
         double maxOppUtility = Collections.max(oppUtility);
-        // Bid maxOppBid = highestUserBids.get(oppUtility.indexOf(maxOppUtility));
+        Bid maxOppBid = highestUserBids.get(oppUtility.indexOf(maxOppUtility));
         Bid userMax = bidList.get(bidList.size() - 1);
-        endPoints[0][0] = opponentUtilities.get(userMax);
-        endPoints[0][1] = predictAddtiveSpace.getUtility(userMax);
+        endPoints[0][0] = (opponentUtilities.get(userMax) + opponentUtilities.get(maxOppBid)) / 2;
+        endPoints[0][1] = (predictAddtiveSpace.getUtility(userMax) + predictAddtiveSpace.getUtility(maxOppBid)) / 2;
 
         // 对方最高时 我方最高
         List<Double> userUtility = new ArrayList<>();
         List<Bid> highestOppBids = opponentBidRank.subList((int) Math.floor((bidList.size() - 1) * 0.98), bidList.size() - 1);
-        for (Bid bid:highestUserBids) {
+        for (Bid bid:highestOppBids) {
             // user
             double utility = predictAddtiveSpace.getUtility(bid);
             userUtility.add(utility);
         }
         double maxUserUtility = Collections.max(userUtility);
-        // Bid maxUserBid = highestUserBids.get(userUtility.indexOf(maxUserUtility));
+        Bid maxUserBid = highestUserBids.get(userUtility.indexOf(maxUserUtility));
         Bid opponentMax = opponentBidRank.get(opponentBidRank.size() - 1);
-        endPoints[1][0] = opponentUtilities.get(opponentMax);
-        endPoints[1][1] = predictAddtiveSpace.getUtility(opponentMax);
+        endPoints[1][0] = (opponentUtilities.get(maxUserBid) + opponentUtilities.get(opponentMax)) / 2;
+        endPoints[1][1] = (predictAddtiveSpace.getUtility(maxUserBid) + predictAddtiveSpace.getUtility(opponentMax)) / 2;
 
-        System.out.println("endPoints" + endPoints);
+        // System.out.println("endPoints" + endPoints);
 
     }
 
