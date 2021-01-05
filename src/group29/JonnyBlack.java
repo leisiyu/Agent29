@@ -331,9 +331,12 @@ public class JonnyBlack{
         return rank.get(0);
     }
 
-
     public void updateLastOffer(Bid lastOffer) {
         opponentModel.addBid(lastOffer);
+        if(round%10 == 0){
+            opponentModel.update();
+        }
+        round ++;
     }
 
 }
