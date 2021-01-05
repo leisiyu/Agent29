@@ -331,13 +331,6 @@ public class JonnyBlack{
         return rank.get(0);
     }
 
-    public double getAgreementValue(){
-        return AV;
-    }
-
-    public void updateOpponentModel(OpponentModel opponent){
-        this.opponentModel = opponent;
-    }
 
     public void updateLastOffer(Bid lastOffer) {
         opponentModel.addBid(lastOffer);
