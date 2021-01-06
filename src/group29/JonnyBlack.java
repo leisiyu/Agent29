@@ -60,10 +60,11 @@ public class JonnyBlack{
      */
     private ArrayList<Bid> generateAllBid(AdditiveUtilitySpace additiveUtilitySpace) {
         ArrayList<Bid> all_bids = new ArrayList<Bid>();
+
+        //list all options in domain
         ArrayList<ArrayList<ValueDiscrete>> option_lists = new ArrayList<ArrayList<ValueDiscrete>>();
         List<Issue> issues = additiveUtilitySpace.getDomain().getIssues();
         List<Integer> issue_nums = new ArrayList<Integer>();
-
         for (Issue issue : issues)
         {
             issue_nums.add(issue.getNumber());
@@ -75,8 +76,11 @@ public class JonnyBlack{
             }
             option_lists.add(value_list);
         }
+
+        //calcualte cartesian combinations of values
         List<List<ValueDiscrete>> cartesian_combinations = cartesianCombinations(option_lists);
 
+        //convert list to Bid class
         Domain domain = additiveUtilitySpace.getDomain();
         for (List<ValueDiscrete> options : cartesian_combinations)
         {
@@ -226,6 +230,13 @@ public class JonnyBlack{
         return currentCombinations;
     }
 
+    /**
+     * helper of cartesiancvombinations funtion
+     * @param combinations
+     * @param extraElements
+     * @param <T>
+     * @return
+     */
     public static <T> List<List<T>> appendElements(List<List<T>> combinations, List<T> extraElements) {
         return combinations.stream().flatMap(oldCombination
                 -> extraElements.stream().map(extra -> {
@@ -236,6 +247,12 @@ public class JonnyBlack{
                 .collect(Collectors.toList());
     }
 
+    /**
+     * intersect two list
+     * @param l1
+     * @param l2
+     * @return
+     */
     public static ArrayList<Integer> intersection(ArrayList<Integer> l1, ArrayList<Integer> l2) {
         HashSet<Integer> set = new HashSet<>();
         set.addAll(l1);
@@ -283,26 +300,19 @@ public class JonnyBlack{
             //get opponent N best bids and store at a list
             opponentModel.update();
             ArrayList<Integer> OppoBestNBidsIndex = getOpponentBestNBidIndex(allBid, 200, opponentModel);
-            System.out.println("opponent properties :" + "\n" + opponentModel.getIssueWeightStr());
-
 
             //intersection my feasible bids with all bid lists from opponents, get the common bid list
             commonBidsIndex = intersection(feasibleBidIndex , OppoBestNBidsIndex);
 
-            System.out.println("round " + round + " common bids amount: " + commonBidsIndex.size());
-
 
             //Find the best bid in common bid list and re-calculate the AV
             int bestCommonBidIndex = getBestBidIndex(feasibleBidIndex); //best bid will be the overall best bid in all possible bid in default
+
             //if there is common bid, find best bid in common bid
-            System.out.println("Common Bid Amount: " + commonBidsIndex.size());
             if(commonBidsIndex.size() != 0)
             {
                 bestCommonBidIndex = getBestBidIndex(commonBidsIndex);
             }
-
-            System.out.println("round " + round + " AV: " + AV);
-            System.out.println("round " + round + " Care: " + care);
 
             AV = additiveUtilitySpace.getUtility(allBid.get(bestCommonBidIndex)) * reluctance;
 
@@ -318,8 +328,6 @@ public class JonnyBlack{
         {
             if((additiveUtilitySpace.getUtility(rank.get(i)) >= AV) && (opponentModel.getUtility(rank.get(i)) >= care))
             {
-//				System.out.println(opponentModelMap.get(agentToFavour).getUtility(rank.get(i)));
-//				System.out.println(opponentModelMap.get(agentToFavour).getOptionValueStr());
                 lastBidIndex = i+1;
 
                 return rank.get(i);
@@ -331,6 +339,10 @@ public class JonnyBlack{
         return rank.get(0);
     }
 
+    /**
+     * store last offer from opponent, update opponent model every 10 round
+     * @param lastOffer
+     */
     public void updateLastOffer(Bid lastOffer) {
         opponentModel.addBid(lastOffer);
         if(round%10 == 0){
