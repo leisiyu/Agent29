@@ -60,27 +60,24 @@ public class UserPrefElicit {
                 population.add(child);
             }
 
+            // 5. random migration to fill popSize
             popSize = population.size();
             if (popSize < 50) {
                 for (int j = 0; j < 50-popSize; j ++) {
                     population.add(getRandomChromosome());
                 }
             }
-            System.out.println("Population size: " + population.size());
+            // System.out.println("Population size: " + population.size());
         }
 
-        // select the best one in the final population to be our userPref
-        List<Double> adaptiveValueList = new ArrayList<> ();
-        for (AbstractUtilitySpace pop: population) {
-            adaptiveValueList.add(getAdaptiveValue(pop, maxIterNum));
-        }
-        double bestFitness = Collections.max(adaptiveValueList);
-        int index = adaptiveValueList.indexOf(bestFitness);
-        return population.get(index);
+        // 6. select the best one in the final population to be our userPref
+        AbstractUtilitySpace retPop = getTheBestPopulation(population);
+        return retPop;
     }
 
     // generate random AbstractUtilitySpace
-    // this part is the same from
+    // learning from this Github link:
+    // https://github.com/RobinLuoNanjing/UoSouthampton-Intelligent-Agent-Docs/blob/master/docs/user.md
     private AbstractUtilitySpace getRandomChromosome() {
         AdditiveUtilitySpaceFactory additiveUtilitySpaceFactory =
                 new AdditiveUtilitySpaceFactory(userModel.getDomain());
@@ -96,8 +93,8 @@ public class UserPrefElicit {
         return additiveUtilitySpaceFactory.getUtilitySpace();
     }
 
+    // get fitness of the population
     private double getAdaptiveValue(AbstractUtilitySpace abstractUtilitySpace, int iterNum) {
-
         // 1. generate validationBidList
         int validationBidListSize = 500; // size of validationBidList
         double M = 3;
@@ -201,6 +198,7 @@ public class UserPrefElicit {
         return nextPopulation;
     }
 
+    // crossover
     private AbstractUtilitySpace crossover(AdditiveUtilitySpace father, AdditiveUtilitySpace mother) {
         double fatherGene;
         double motherGene;
@@ -226,6 +224,17 @@ public class UserPrefElicit {
         return additiveUtilitySpaceFactory.getUtilitySpace();
     }
 
+    // get the best population as our user preference
+    private AbstractUtilitySpace getTheBestPopulation(List<AbstractUtilitySpace> population) {
+        List<Double> adaptiveValueList = new ArrayList<> ();
+        for (AbstractUtilitySpace pop: population) {
+            adaptiveValueList.add(getAdaptiveValue(pop, maxIterNum));
+        }
+        double bestFitness = Collections.max(adaptiveValueList);
+        int index = adaptiveValueList.indexOf(bestFitness);
+        return population.get(index);
+    }
+
     private double getAverage(List<Double> list) {
         double sum = 0;
         for (Double aDouble : list) {
@@ -234,6 +243,7 @@ public class UserPrefElicit {
         return sum / list.size();
     }
 
+    // generate child gene
     private double getCrossoverGene(double shiftStep, double fatherGene, double motherGene) {
         double unionGene = fatherGene + motherGene / 2;
         double childGene;
@@ -255,8 +265,7 @@ public class UserPrefElicit {
     }
 }
 
-class TreeMapComp implements Comparator<Map.Entry<Integer, Double>>
-{
+class TreeMapComp implements Comparator<Map.Entry<Integer, Double>> {
     @Override
     public int compare(Map.Entry<Integer, Double> o1, Map.Entry<Integer, Double> o2) {
         int flag = o1.getValue().compareTo(o2.getValue());
