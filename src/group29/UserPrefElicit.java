@@ -20,7 +20,7 @@ public class UserPrefElicit {
     private List<AbstractUtilitySpace> population = new ArrayList<>();  // initial population in GA
     private int initPopSize = 10000;          // size of population
     private int maxIterNum = 50;       // iteration number of GA
-    private double crossoverRate = 0.1; // crossover rate
+    private double crossoverRate = 0.3; // crossover rate
     private double mutationRate = 0.04; // mutation rate
     private double M = 50.0f;
     private double r = 0.9;
@@ -46,7 +46,7 @@ public class UserPrefElicit {
                 adaptiveValueList.add(getAdaptiveValue(population.get(j), i));
             }
 
-            System.out.println("Average fitness: " + getAverage(adaptiveValueList));
+            // System.out.println("Average fitness: " + getAverage(adaptiveValueList));
 
             // 3. selection
             population = selection(population, adaptiveValueList);
@@ -59,6 +59,14 @@ public class UserPrefElicit {
                 AbstractUtilitySpace child = crossover(father, mother);
                 population.add(child);
             }
+
+            popSize = population.size();
+            if (popSize < 50) {
+                for (int j = 0; j < 50-popSize; j ++) {
+                    population.add(getRandomChromosome());
+                }
+            }
+            System.out.println("Population size: " + population.size());
         }
 
         // select the best one in the final population to be our userPref
@@ -91,7 +99,7 @@ public class UserPrefElicit {
     private double getAdaptiveValue(AbstractUtilitySpace abstractUtilitySpace, int iterNum) {
 
         // 1. generate validationBidList
-        int validationBidListSize = 1000; // size of validationBidList
+        int validationBidListSize = 500; // size of validationBidList
         double M = 3;
         double r = 0.9;
 
@@ -138,8 +146,8 @@ public class UserPrefElicit {
 
     // selection
     private List<AbstractUtilitySpace> selection(List<AbstractUtilitySpace> population, List<Double> fitnessList) {
-        int eliteSize = 2; // size of selected elite
-        int eliteGroupSize = 10; // size of selected elite group
+        int eliteSize = 10; // size of selected elite
+        int eliteGroupSize = 20; // size of selected elite group
         int[] eliteGroupIndexList = new int[eliteGroupSize];
         int populationSize = fitnessList.size();
         List<AbstractUtilitySpace> nextPopulation = new ArrayList<>();
