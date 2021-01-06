@@ -99,33 +99,51 @@ public class Agent29 extends AbstractNegotiationParty
         double time = timeline.getTime();
         concessionByTime(time);
 
-        // 时间小于0.5 只发最高的offer 不接受
-        if (time < 0.3) {
-            threshold = getThresholdByTime(time);
-            return new Offer(getPartyId(), generateRandomBidByRankNoJB(threshold));
-        }  else if (time < 0.5){
-            threshold = getThresholdByTime(time);
-            return new Offer(getPartyId(), generateRandomBidByRankWithJB(threshold));
-        }
-        else if (time < 0.9999) {
-            if (checkIfBidCanBeAccepted(lastOffer, time)) {
-                return new Accept(getPartyId(), lastOffer);
-            } else {
-                // TO DO:
-                if (jonnyBlackRound == 10) {
-                    jonnyBlackRound = 0;
-                    // TO DO: jonny black
-                    calculateAllOpponentUtilities();
-                    getEndPoints();
-                    getAvailableBids();
+        if (userModel.getDomain().getNumberOfPossibleBids() >= 50) {
+            // 时间小于0.5 只发最高的offer 不接受
+            if (time < 0.3) {
+                threshold = getThresholdByTime(time);
+                return new Offer(getPartyId(), generateRandomBidByRankNoJB(threshold));
+            }  else if (time < 0.5){
+                threshold = getThresholdByTime(time);
+                return new Offer(getPartyId(), generateRandomBidByRankWithJB(threshold));
+            }
+            else if (time < 0.9999) {
+                if (checkIfBidCanBeAccepted(lastOffer, time)) {
+                    return new Accept(getPartyId(), lastOffer);
+                } else {
+                    if (jonnyBlackRound == 10) {
+                        jonnyBlackRound = 0;
+                        // jonny black
+                        calculateAllOpponentUtilities();
+                        getEndPoints();
+                        getAvailableBids();
+                    }
+                    jonnyBlackRound += 1;
+                    // System.out.println("My utility is: "+ predictAddtiveSpace.getUtility(lastOffer));
+                    // System.out.println("Opponent utility is: "+ jonnyBlack.getOpponentUtility(lastOffer));
+                    return new Offer(getPartyId(), generateRandomBidByAvailable(time));
                 }
-                jonnyBlackRound += 1;
-                // System.out.println("My utility is: "+ predictAddtiveSpace.getUtility(lastOffer));
-                // System.out.println("Opponent utility is: "+ jonnyBlack.getOpponentUtility(lastOffer));
-                return new Offer(getPartyId(), generateRandomBidByAvailable(time));
+            } else {
+                return new EndNegotiation(getPartyId());
             }
         } else {
-            return new EndNegotiation(getPartyId());
+            // 小domain
+            System.out.println("number of bids: " + userModel.getDomain().getNumberOfPossibleBids());
+            if (time < 0.9999) {
+                if (lastOffer == null) {
+                    return new Offer(getPartyId(), generateRandomBidByRankForSmallDomain());
+                }
+
+                if (checkIfBidCanBeAccepted(lastOffer, time)) {
+                    return new Accept(getPartyId(), lastOffer);
+                } else {
+                    return new Offer(getPartyId(), generateRandomBidByRankForSmallDomain());
+                }
+            } else {
+                return new EndNegotiation(getPartyId());
+            }
+
         }
 
     }
@@ -171,26 +189,30 @@ public class Agent29 extends AbstractNegotiationParty
         return 0.125;
     }
 
-    // TO DO
     private Boolean checkIfBidCanBeAccepted(Bid bid, Double time) {
+        if (userModel.getDomain().getNumberOfPossibleBids() >= 50) {
+            Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
+            Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
 
-        Point2D.Double one = new Point2D.Double(endPoints[0][0], endPoints[0][1]);
-        Point2D.Double two = new Point2D.Double(endPoints[1][0], endPoints[1][1]);
+            Point2D.Double target = new Point2D.Double(jonnyBlack.getOpponentUtility(bid), predictAddtiveSpace.getUtility(bid));
+            double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
 
-        Point2D.Double target = new Point2D.Double(jonnyBlack.getOpponentUtility(bid), predictAddtiveSpace.getUtility(bid));
-        double v = (two.x - one.x) * (target.y - one.y) - (target.x - one.x) * (two.y - one.y);
+            double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
+            // System.out.println("last offer utility: "+ userLastOfferUtility);
 
-        double userLastOfferUtility = predictAddtiveSpace.getUtility(bid);
-        // System.out.println("last offer utility: "+ userLastOfferUtility);
-
-        if (v >= 0 &&checkIfNearNashPoint(bid)) {
-            return true;
-        } else {
-        // if (time < 0.95) {
-            if (userLastOfferUtility <= concessionUtility[1] && userLastOfferUtility >= concessionUtility[0]) {
+            if (v >= 0 &&checkIfNearNashPoint(bid)) {
                 return true;
+            } else {
+                if (userLastOfferUtility <= concessionUtility[1] && userLastOfferUtility >= concessionUtility[0]) {
+                    return true;
+                }
             }
+        } else {
+            elicitRank(bid);
+            double bidIndexProportion = bidList.indexOf(bid) / bidList.size();
+            return bidIndexProportion >= 0.7 && bidIndexProportion <= 0.9;
         }
+
 
         return false;
     }
@@ -209,7 +231,6 @@ public class Agent29 extends AbstractNegotiationParty
     }
 
 
-    // TO DO: 调整
     private void concessionByTime(double time) {
         if (time >= 0.5 && time <0.7) {
             concessionUtility[0] = 0.9;
@@ -351,6 +372,12 @@ public class Agent29 extends AbstractNegotiationParty
 //        int index = rand.nextInt(availableBids.size() - 1);
 //        return availableBids.get(index);
 
+    }
+
+    private Bid generateRandomBidByRankForSmallDomain() {
+        int minIdx = (int) Math.ceil((1 - 0.3) * bidList.size());
+        int index = rand.nextInt(bidList.size() - 1 - minIdx) + minIdx;
+        return bidList.get(index);
     }
 
     // elicit rank 会产生额外cost
